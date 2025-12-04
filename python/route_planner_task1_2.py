@@ -52,7 +52,8 @@ class Graph:
 class PriorityNode:
     def __init__(self, node_id: int, priority: str):
         self.id = node_id
-        self.priority = priority
+        self.priority_value = priority
+        self.done = False
 
 class Priority:
     def __init__(self):
@@ -175,9 +176,8 @@ def load_priority(priority_file: str) -> Priority:
         reader = csv.DictReader(f)
         for row in reader:
             node_id = int(row['id'])
-            lat = float(row['lat'])
-            lon = float(row['lon'])
-            graph.add_node(node_id, lat, lon)
+            priority_str = int(row['priority'])
+            priority.add_priority_node(node_id, priority_str)
     
     return priority
 
@@ -197,6 +197,8 @@ def main():
     
     # Load graph
     graph = load_graph(nodes_file, edges_file)
+
+    priority = load_priority(priority_file)
     
     # Validate nodes
     if start_node not in graph.nodes or end_node not in graph.nodes:
@@ -205,8 +207,24 @@ def main():
     
     # Run selected algorithm
     if algorithm == "dijkstra":
-
         for i in range(0, len(priority_file)):
+
+            found = False
+
+            for priority_node in priority.priorities:
+                if priority_node.priority_value == "HIGH" and priority_node.done == False:
+                    found = True
+                    priority_node.done = True
+                    
+
+            '''
+            Idea: find the dijsktas to all, keep the lowest id and distance for each of the three categories (6 vars total)
+            do the check if the closest high meets criteria, if not closest medium, then closest small (eg check if medium or small has smaller distace by some percentage, then if small has smaller by some percentage than medium)
+            run dikstras one more time to that node, also checking off the visited bool in the priority node list (its dictionary)
+            print this path and the other stuff
+            repeat as long as there are still locations to visit
+            '''
+
             total_nodes = 0
             total_distance = 0
             dist, prev, nodes_explored = dijkstra(graph, start_node, end_node)
