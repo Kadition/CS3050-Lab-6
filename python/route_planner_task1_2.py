@@ -2,13 +2,9 @@
 """
 Kaden Culbertson (krc6m9)
 12/4/2025
-Lab 6 Part 1
+Lab 6 Part 1.2
 
-Route Planner with Dijkstra, modified for time frames
-
-for a feasible path: python3 route_planner_task1.py ../data/example_time_window_nodes.csv ../data/task1_edges_success.csv 1 3 dijkstra
-for an infeasible path: python3 route_planner_task1.py ../data/example_time_window_nodes.csv ../data/task1_edges_fail.csv 1 3 dijkstra
-for a case where the shortest distance path violates constraints: python3 route_planner_task1.py ../data/example_time_window_nodes.csv ../data/task1_edges_violation.csv 1 3 dijkstra
+Route Planner with Dijkstra, modified for priority
 """
 
 import sys
@@ -22,12 +18,10 @@ EARTH_RADIUS = 6371.0  # km
 
 class Node:
     """Represents a node in the graph"""
-    def __init__(self, node_id: int, lat: float, lon: float, earliest: int, latest: int):
+    def __init__(self, node_id: int, lat: float, lon: float):
         self.id = node_id
         self.lat = lat
         self.lon = lon
-        self.earliest = earliest # added new data to the nodes (earliest, latest, and distance)
-        self.latest = latest
 
 
 class Edge:
@@ -43,9 +37,9 @@ class Graph:
         self.nodes: Dict[int, Node] = {}
         self.adj_list: Dict[int, List[Edge]] = {}
     
-    def add_node(self, node_id: int, lat: float, lon: float, earliest: int, latest: int):
+    def add_node(self, node_id: int, lat: float, lon: float):
         """Add a node to the graph"""
-        self.nodes[node_id] = Node(node_id, lat, lon, earliest, latest)
+        self.nodes[node_id] = Node(node_id, lat, lon)
         if node_id not in self.adj_list:
             self.adj_list[node_id] = []
     
@@ -73,74 +67,128 @@ def dijkstra(graph: Graph, start: int, end: int) -> Tuple[Dict[int, float], Dict
     Dijkstra's algorithm for shortest path
     Returns: (distances, previous nodes, nodes explored)
     """
-
-    # gives the total amount a bypasses this iteration searching for a path
-    ignore_count = 0
-
-    # gives the total amount a bypasses it can use in the case of a fail
-    ignore_count_amount = 0
-
-    # if the path has failed
-    failed = False
-
-    # continue util you find a path or you are able to violate the constrait on every node, but there is still no path
-    while ignore_count_amount < len(graph.nodes):
+    dist = {node_id: float('inf') for node_id in graph.nodes}
+    prev = {node_id: None for node_id in graph.nodes}
+    dist[start] = 0
+    
+    pq = [(0, start)]
+    nodes_explored = 0
+    visited = set()
+    
+    while pq:
+        current_dist, u = heapq.heappop(pq)
         
-        ignore_count = ignore_count_amount
+        if u in visited:
+            continue
+        
+        visited.add(u)
+        nodes_explored += 1
+        
+        if u == end:
+            break
+        
+        if current_dist > dist[u]:
+            continue
+        
+        for edge in graph.adj_list.get(u, []):
+            v = edge.to
+            alt = dist[u] + edge.weight
+            
+            if alt < dist[v]:
+                dist[v] = alt
+                prev[v] = u
+                heapq.heappush(pq, (alt, v))
+    
+    return dist, prev, nodes_explored
 
-        dist = {node_id: float('inf') for node_id in graph.nodes}
-        prev = {node_id: None for node_id in graph.nodes}
-        dist[start] = 0
+
+def astar(graph: Graph, start: int, end: int) -> Tuple[Dict[int, float], Dict[int, Optional[int]], int]:
+    """
+    A* algorithm for shortest path
+    Returns: (distances, previous nodes, nodes explored)
+    """
+    dist = {node_id: float('inf') for node_id in graph.nodes}
+    prev = {node_id: None for node_id in graph.nodes}
+    dist[start] = 0
+    
+    end_node = graph.nodes[end]
+    
+    def heuristic(node_id: int) -> float:
+        node = graph.nodes[node_id]
+        return haversine(node.lat, node.lon, end_node.lat, end_node.lon)
+    
+    pq = [(heuristic(start), start)]
+    nodes_explored = 0
+    visited = set()
+    
+    while pq:
+        _, u = heapq.heappop(pq)
         
-        pq = [(0, start)]
-        nodes_explored = 0
-        visited = set()
+        if u in visited:
+            continue
         
-        while pq:
-            current_dist, u = heapq.heappop(pq)
+        visited.add(u)
+        nodes_explored += 1
+        
+        if u == end:
+            break
+        
+        for edge in graph.adj_list.get(u, []):
+            v = edge.to
+            alt = dist[u] + edge.weight
             
-            if u in visited:
-                continue
-            
-            visited.add(u)
-            nodes_explored += 1
-            
-            if u == end:
-                break
-            
-            if current_dist > dist[u]:
+            if alt < dist[v]:
+                dist[v] = alt
+                prev[v] = u
+                f_score = alt + heuristic(v)
+                heapq.heappush(pq, (f_score, v))
+    
+    return dist, prev, nodes_explored
+
+
+def bellman_ford(graph: Graph, start: int, end: int) -> Tuple[Optional[Dict[int, float]], Optional[Dict[int, Optional[int]]], int]:
+    """
+    Bellman-Ford algorithm for shortest path
+    Can handle negative weights and detect negative cycles
+    Returns: (distances, previous nodes, nodes explored) or (None, None, 0) if negative cycle detected
+    """
+    dist = {node_id: float('inf') for node_id in graph.nodes}
+    prev = {node_id: None for node_id in graph.nodes}
+    dist[start] = 0
+    
+    nodes_explored = 0
+    node_count = len(graph.nodes)
+    
+    # Relax edges |V| - 1 times
+    for i in range(node_count - 1):
+        updated = False
+        for u in graph.nodes:
+            if dist[u] == float('inf'):
                 continue
             
             for edge in graph.adj_list.get(u, []):
                 v = edge.to
-                alt = dist[u] + edge.weight
-                
-                # the second two checks will make sure that the time meets the constraints that the earliest and latest attributes provide
-                # or, if it has failed, it can bypass that to a certain amount, guarenting the least amount of violations
-                if alt < dist[v] and ((graph.nodes[v].earliest <= alt and graph.nodes[v].latest >= alt) or ignore_count > 0):
-                    if(not (graph.nodes[v].earliest <= alt and graph.nodes[v].latest >= alt)):
-                        ignore_count -= 1
-                    dist[v] = alt
+                if dist[u] + edge.weight < dist[v]:
+                    dist[v] = dist[u] + edge.weight
                     prev[v] = u
-                    heapq.heappush(pq, (alt, v))
-
-        # a check to see if a path was not found
-        if prev[end] is None and start != end and not failed:
-            print("No feasible path satisfying time constraints")
-            print("Failed on node " + str(u))
-            print("Finding path with least number of violations")
-            ignore_count_amount += 1
-            failed = True
+                    updated = True
         
-        # checks if the path failed again
-        elif prev[end] is None and start != end and failed:
-            ignore_count_amount += 1
-
-        # if you have a path, return it
-        else:
+        nodes_explored += 1
+        if not updated:
             break
+    
+    # Check for negative cycles
+    for u in graph.nodes:
+        if dist[u] == float('inf'):
+            continue
         
+        for edge in graph.adj_list.get(u, []):
+            v = edge.to
+            if dist[u] + edge.weight < dist[v]:
+                return None, None, 0  # Negative cycle detected
+    
     return dist, prev, nodes_explored
+
 
 def reconstruct_path(prev: Dict[int, Optional[int]], start: int, end: int) -> Optional[List[int]]:
     """Reconstruct path from start to end using previous nodes"""
@@ -181,9 +229,7 @@ def load_graph(nodes_file: str, edges_file: str) -> Graph:
             node_id = int(row['id'])
             lat = float(row['lat'])
             lon = float(row['lon'])
-            earliest = float(row['earliest']) # added new data to the nodes (earliest, latest, and distance)
-            latest = float(row['latest'])
-            graph.add_node(node_id, lat, lon, earliest, latest)
+            graph.add_node(node_id, lat, lon)
     
     # Load edges
     with open(edges_file, 'r') as f:
@@ -221,6 +267,15 @@ def main():
     if algorithm == "dijkstra":
         print("=== Dijkstra's Algorithm ===")
         dist, prev, nodes_explored = dijkstra(graph, start_node, end_node)
+    elif algorithm == "astar":
+        print("=== A* Algorithm ===")
+        dist, prev, nodes_explored = astar(graph, start_node, end_node)
+    elif algorithm == "bellman-ford":
+        print("=== Bellman-Ford Algorithm ===")
+        dist, prev, nodes_explored = bellman_ford(graph, start_node, end_node)
+        if dist is None:
+            print("Negative cycle detected!")
+            sys.exit(1)
     else:
         print(f"Unknown algorithm: {algorithm}")
         print("Available algorithms: dijkstra, astar, bellman-ford")
