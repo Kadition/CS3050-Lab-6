@@ -67,39 +67,73 @@ def dijkstra(graph: Graph, start: int, end: int) -> Tuple[Dict[int, float], Dict
     Dijkstra's algorithm for shortest path
     Returns: (distances, previous nodes, nodes explored)
     """
-    dist = {node_id: float('inf') for node_id in graph.nodes}
-    prev = {node_id: None for node_id in graph.nodes}
-    dist[start] = 0
-    
-    pq = [(0, start)]
-    nodes_explored = 0
-    visited = set()
-    
-    while pq:
-        current_dist, u = heapq.heappop(pq)
+
+    # gives the total amount a bypasses this iteration searching for a path
+    ignore_count = 0
+
+    # gives the total amount a bypasses it can use in the case of a fail
+    ignore_count_amount = 0
+
+    # if the path has failed
+    failed = False
+
+    # continue util you find a path or you are able to violate the constrait on every node, but there is still no path
+    while ignore_count_amount < len(graph.nodes):
         
-        if u in visited:
-            continue
+        ignore_count = ignore_count_amount
+
+        dist = {node_id: float('inf') for node_id in graph.nodes}
+        prev = {node_id: None for node_id in graph.nodes}
+        dist[start] = 0
         
-        visited.add(u)
-        nodes_explored += 1
+        pq = [(0, start)]
+        nodes_explored = 0
+        visited = set()
         
-        if u == end:
+        while pq:
+            current_dist, u = heapq.heappop(pq)
+            
+            if u in visited:
+                continue
+            
+            visited.add(u)
+            nodes_explored += 1
+            
+            if u == end:
+                break
+            
+            if current_dist > dist[u]:
+                continue
+            
+            for edge in graph.adj_list.get(u, []):
+                v = edge.to
+                alt = dist[u] + edge.weight
+                
+                # the second two checks will make sure that the time meets the constraints that the earliest and latest attributes provide
+                # or, if it has failed, it can bypass that to a certain amount, guarenting the least amount of violations
+                if alt < dist[v] and ((graph.nodes[v].earliest <= alt and graph.nodes[v].latest >= alt) or ignore_count > 0):
+                    if(not (graph.nodes[v].earliest <= alt and graph.nodes[v].latest >= alt)):
+                        ignore_count -= 1
+                    dist[v] = alt
+                    prev[v] = u
+                    heapq.heappush(pq, (alt, v))
+
+        # a check to see if a path was not found
+        if prev[end] is None and start != end and not failed:
+            print("No feasible path satisfying time constraints")
+            print("Failed on node " + str(u))
+            print("Finding path with least number of violations")
+            ignore_count_amount += 1
+            failed = True
+        
+        # checks if the path failed again
+        elif prev[end] is None and start != end and failed:
+            ignore_count_amount += 1
+
+        # if you have a path, return it
+        else:
             break
         
-        if current_dist > dist[u]:
-            continue
-        
-        for edge in graph.adj_list.get(u, []):
-            v = edge.to
-            alt = dist[u] + edge.weight
-            
-            # the second two checks will make sure that the time meets the constraints that the earliest and latest attributes provide
-            if alt < dist[v] and graph.nodes[v].earliest <= alt and graph.nodes[v].latest >= alt:
-                dist[v] = alt
-                prev[v] = u
-                heapq.heappush(pq, (alt, v))
-    
     return dist, prev, nodes_explored
 
 def reconstruct_path(prev: Dict[int, Optional[int]], start: int, end: int) -> Optional[List[int]]:
