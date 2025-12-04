@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """
+Kaden Culbertson (krc6m9)
+12/4/2025
+Lab 6 Part 1
+
 Route Planner with Dijkstra, modified for time frames
 
-for run: python3 route_planner_task1.py ../data/example_time_window_nodes.csv ../data/task1_edges.csv <start_node_int> <end_node_int> dijkstra
+for a feasible path: python3 route_planner_task1.py ../data/example_time_window_nodes.csv ../data/task1_edges_success.csv 1 3 dijkstra
+for an infeasible path: python3 route_planner_task1.py ../data/example_time_window_nodes.csv ../data/task1_edges_fail.csv 1 3 dijkstra
+for a case where the shortest distance path violates constraints: python3 route_planner_task1.py ../data/example_time_window_nodes.csv ../data/task1_edges_violation.csv 1 3 dijkstra
 """
 
 import sys
