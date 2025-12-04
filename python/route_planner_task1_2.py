@@ -49,6 +49,18 @@ class Graph:
             self.adj_list[from_id] = []
         self.adj_list[from_id].append(Edge(to_id, weight))
 
+class PriorityNode:
+    def __init__(self, node_id: int, priority: str):
+        self.id = node_id
+        self.priority = priority
+
+class Priority:
+    def __init__(self):
+        self.priorities: Dict[int, PriorityNode] = {}
+    
+    def add_priority_node(self, node_id: int, priority: str):
+        self.nodes[node_id] = Node(node_id, priority)
+
 
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate haversine distance between two points"""
@@ -102,94 +114,6 @@ def dijkstra(graph: Graph, start: int, end: int) -> Tuple[Dict[int, float], Dict
     return dist, prev, nodes_explored
 
 
-def astar(graph: Graph, start: int, end: int) -> Tuple[Dict[int, float], Dict[int, Optional[int]], int]:
-    """
-    A* algorithm for shortest path
-    Returns: (distances, previous nodes, nodes explored)
-    """
-    dist = {node_id: float('inf') for node_id in graph.nodes}
-    prev = {node_id: None for node_id in graph.nodes}
-    dist[start] = 0
-    
-    end_node = graph.nodes[end]
-    
-    def heuristic(node_id: int) -> float:
-        node = graph.nodes[node_id]
-        return haversine(node.lat, node.lon, end_node.lat, end_node.lon)
-    
-    pq = [(heuristic(start), start)]
-    nodes_explored = 0
-    visited = set()
-    
-    while pq:
-        _, u = heapq.heappop(pq)
-        
-        if u in visited:
-            continue
-        
-        visited.add(u)
-        nodes_explored += 1
-        
-        if u == end:
-            break
-        
-        for edge in graph.adj_list.get(u, []):
-            v = edge.to
-            alt = dist[u] + edge.weight
-            
-            if alt < dist[v]:
-                dist[v] = alt
-                prev[v] = u
-                f_score = alt + heuristic(v)
-                heapq.heappush(pq, (f_score, v))
-    
-    return dist, prev, nodes_explored
-
-
-def bellman_ford(graph: Graph, start: int, end: int) -> Tuple[Optional[Dict[int, float]], Optional[Dict[int, Optional[int]]], int]:
-    """
-    Bellman-Ford algorithm for shortest path
-    Can handle negative weights and detect negative cycles
-    Returns: (distances, previous nodes, nodes explored) or (None, None, 0) if negative cycle detected
-    """
-    dist = {node_id: float('inf') for node_id in graph.nodes}
-    prev = {node_id: None for node_id in graph.nodes}
-    dist[start] = 0
-    
-    nodes_explored = 0
-    node_count = len(graph.nodes)
-    
-    # Relax edges |V| - 1 times
-    for i in range(node_count - 1):
-        updated = False
-        for u in graph.nodes:
-            if dist[u] == float('inf'):
-                continue
-            
-            for edge in graph.adj_list.get(u, []):
-                v = edge.to
-                if dist[u] + edge.weight < dist[v]:
-                    dist[v] = dist[u] + edge.weight
-                    prev[v] = u
-                    updated = True
-        
-        nodes_explored += 1
-        if not updated:
-            break
-    
-    # Check for negative cycles
-    for u in graph.nodes:
-        if dist[u] == float('inf'):
-            continue
-        
-        for edge in graph.adj_list.get(u, []):
-            v = edge.to
-            if dist[u] + edge.weight < dist[v]:
-                return None, None, 0  # Negative cycle detected
-    
-    return dist, prev, nodes_explored
-
-
 def reconstruct_path(prev: Dict[int, Optional[int]], start: int, end: int) -> Optional[List[int]]:
     """Reconstruct path from start to end using previous nodes"""
     if prev[end] is None and start != end:
@@ -215,7 +139,7 @@ def print_path(graph: Graph, prev: Dict[int, Optional[int]], start: int, end: in
     
     path_str = " -> ".join(str(node) for node in path)
     print(f"Path from {start} to {end}: {path_str}")
-    print(f"Total distance: {distance:.2f} km")
+    print(f"Distance in this path: {distance:.2f} km")
 
 
 def load_graph(nodes_file: str, edges_file: str) -> Graph:
@@ -242,10 +166,25 @@ def load_graph(nodes_file: str, edges_file: str) -> Graph:
     
     return graph
 
+def load_priority(priority_file: str) -> Priority:
+    """Load graph from CSV files"""
+    priority = Priority()
+    
+    # Load priority
+    with open(priority_file, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            node_id = int(row['id'])
+            lat = float(row['lat'])
+            lon = float(row['lon'])
+            graph.add_node(node_id, lat, lon)
+    
+    return priority
+
 
 def main():
-    if len(sys.argv) != 6:
-        print(f"Usage: {sys.argv[0]} <nodes.csv> <edges.csv> <start_node> <end_node> <algorithm>")
+    if len(sys.argv) != 7:
+        print(f"Usage: {sys.argv[0]} <nodes.csv> <edges.csv> <start_node> <end_node> <algorithm> <priority.csv")
         print("Algorithms: dijkstra, astar, bellman-ford")
         sys.exit(1)
     
@@ -254,6 +193,7 @@ def main():
     start_node = int(sys.argv[3])
     end_node = int(sys.argv[4])
     algorithm = sys.argv[5]
+    priority_file = sys.argv[6]
     
     # Load graph
     graph = load_graph(nodes_file, edges_file)
@@ -265,25 +205,22 @@ def main():
     
     # Run selected algorithm
     if algorithm == "dijkstra":
-        print("=== Dijkstra's Algorithm ===")
-        dist, prev, nodes_explored = dijkstra(graph, start_node, end_node)
-    elif algorithm == "astar":
-        print("=== A* Algorithm ===")
-        dist, prev, nodes_explored = astar(graph, start_node, end_node)
-    elif algorithm == "bellman-ford":
-        print("=== Bellman-Ford Algorithm ===")
-        dist, prev, nodes_explored = bellman_ford(graph, start_node, end_node)
-        if dist is None:
-            print("Negative cycle detected!")
-            sys.exit(1)
+
+        for i in range(0, len(priority_file)):
+            total_nodes = 0
+            total_distance = 0
+            dist, prev, nodes_explored = dijkstra(graph, start_node, end_node)
+            total_nodes += nodes_explored
+            total_distance += dist
+            # Print results
+            print()
+            print_path(graph, prev, start_node, end_node, dist[end_node])
+            print(f"Nodes explored: {nodes_explored}. Current total: {total_nodes}")
+        print(f"Total nodes explored: {total_nodes} with a total distance of: {total_distance}")
     else:
         print(f"Unknown algorithm: {algorithm}")
         print("Available algorithms: dijkstra, astar, bellman-ford")
         sys.exit(1)
-    
-    # Print results
-    print_path(graph, prev, start_node, end_node, dist[end_node])
-    print(f"Nodes explored: {nodes_explored}")
 
 
 if __name__ == "__main__":
