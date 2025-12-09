@@ -15,6 +15,7 @@ import sys
 import csv
 import heapq
 import math
+import time
 from typing import Dict, List, Tuple, Optional
 
 EARTH_RADIUS = 6371.0  # km
@@ -217,6 +218,8 @@ def main():
         print("Invalid start or end node")
         sys.exit(1)
     
+    start_time = time.time()
+
     # Run selected algorithm
     if algorithm == "dijkstra":
         print("=== Dijkstra's Algorithm ===")
@@ -225,6 +228,10 @@ def main():
         print(f"Unknown algorithm: {algorithm}")
         print("Available algorithms: dijkstra, astar, bellman-ford")
         sys.exit(1)
+
+    end_time = time.time()    # Record the end time
+    elapsed_time = end_time - start_time
+    print(f"Execution time: {elapsed_time:.8f} seconds")
     
     # Print results
     print_path(graph, prev, start_node, end_node, dist[end_node])
